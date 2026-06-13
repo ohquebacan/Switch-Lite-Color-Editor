@@ -21,19 +21,24 @@ def resource_path(rel):
 # DESCIFRADO (.dec / .bin). NO toca el serial ni el certificado.
 # ---------------------------------------------------------------------------
 
-SCRIPT_VERSION = "dual-1.4"
+SCRIPT_VERSION = "dual-1.5"
 
 CRC_16_TABLE = [
     0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
     0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400
 ]
 
-# Offsets CAL0 (Switchbrew + pruebas en consola). Solo se exponen los que
-# de verdad pintan algo: Main + Bezel (tablet/cuerpo) y Sub (botones de la Lite).
-# Main2 (0x4250) y Main3 (0x4260) son INERTES en Lite y en Switch normal -> no se incluyen.
+# Offsets CAL0 (Switchbrew + pruebas en consola).
+# Main + Bezel = lo que PINTA visiblemente (cuerpo/marco de la tablet, cuerpo Lite).
+# Sub = botones de la Lite.
+# Main2 (0x4250) y Main3 (0x4260) NO pintan nada, PERO en la Switch normal hay que
+# poblarlos con valores reales (no placeholder) la PRIMERA vez para "activar" el
+# esquema de color — si no, la tablet sale negra aunque cambies Bezel/Main.
 OFF_MAIN  = 0x4240   # Cuerpo (Lite) / marco de la tablet (Switch normal)
 OFF_BEZEL = 0x4230   # Borde / bisel
 OFF_SUB   = 0x4220   # Botones / +-  (Lite)
+OFF_MAIN2 = 0x4250   # no pinta, pero "enable" del esquema en Switch normal
+OFF_MAIN3 = 0x4260   # no pinta, pero "enable" del esquema en Switch normal
 COLORMODEL_OFFSET     = 0x4330
 COLORVARIATION_OFFSET = 0x3750   # gate del esquema; 0 = negro, usar 1-4
 
@@ -41,6 +46,8 @@ COLOR_OFFSETS = {
     'Cuerpo (Main)':      OFF_MAIN,
     'Borde (Bezel)':      OFF_BEZEL,
     'Botones / +- (Sub)': OFF_SUB,
+    'Main Color 2':       OFF_MAIN2,
+    'Main Color 3':       OFF_MAIN3,
 }
 LITE_ONLY_COLORS = set()   # todos los campos siempre visibles
 
@@ -183,6 +190,21 @@ def on_color_typed(key, *args):
 def set_model_preset(value):
     colormodel_var.set(value)
     set_status(f"Color Model = {value}  ({'Two-tone Zacian' if value == CM_TWOTONE else 'Estandar'})")
+    draw_preview()
+
+
+def activate_scheme():
+    # Switch normal: rellena los campos "enable" (Sub/Main2/Main3) con el color de Cuerpo
+    # para que el firmware active el esquema. No cambian el aspecto visible.
+    base = color_vars['Cuerpo (Main)'].get().lstrip('#').upper()
+    if len(base) != 6 or not all(c in "0123456789ABCDEF" for c in base):
+        base = "808080"
+    for k in ('Botones / +- (Sub)', 'Main Color 2', 'Main Color 3'):
+        color_vars[k].set(base)
+        color_cards[k].config(bg='#' + base)
+    if colorvariation_var.get().strip() == "0":
+        colorvariation_var.set("1")
+    set_status("Campos 'enable' rellenados. Ajusta Cuerpo/Borde y guarda.")
     draw_preview()
 
 
@@ -385,6 +407,12 @@ r += 1
 tk.Label(frame, text="Archivo:").grid(row=r, column=0, sticky="w", pady=4)
 file_value = tk.Label(frame, text="—", anchor="w")
 file_value.grid(row=r, column=1, columnspan=2, sticky="w", pady=4)
+
+# boton de activacion (Switch normal): rellena Sub/Main2/Main3 de un clic
+activate_frame = tk.Frame(frame)
+activate_frame.grid(row=r + 1, column=0, columnspan=3, sticky="w", pady=(2, 0))
+tk.Button(activate_frame, text="Activar esquema (Switch normal)", command=activate_scheme).pack(side="left")
+tk.Label(activate_frame, text="rellena los campos 'enable'", fg="#888").pack(side="left", padx=6)
 
 # preview
 canvas = tk.Canvas(root, width=240, height=124, bg="#f3f3f3", highlightthickness=0)
