@@ -21,7 +21,7 @@ def resource_path(rel):
 # DESCIFRADO (.dec / .bin). NO toca el serial ni el certificado.
 # ---------------------------------------------------------------------------
 
-SCRIPT_VERSION = "dual-1.2"
+SCRIPT_VERSION = "dual-1.3"
 
 CRC_16_TABLE = [
     0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
@@ -31,17 +31,22 @@ CRC_16_TABLE = [
 # Offsets CAL0 (Switchbrew + pruebas en consola)
 OFF_MAIN  = 0x4240   # Cuerpo
 OFF_BEZEL = 0x4230   # Borde / bisel
-OFF_SUB   = 0x4220   # Botones / +-  (relevante en Lite)
+OFF_SUB   = 0x4220   # Botones / +-  (Lite) / parte del cuerpo (Switch normal)
+OFF_MAIN2 = 0x4250   # Main Color 2 (la Switch NORMAL la usa; en Lite es inerte)
+OFF_MAIN3 = 0x4260   # Main Color 3 (la Switch NORMAL la usa; en Lite es inerte)
 COLORMODEL_OFFSET     = 0x4330
 COLORVARIATION_OFFSET = 0x3750   # selecciona el set de colores; 0 = negro, usar 1-4
 
-# key -> offset (el orden define filas)
+# key -> offset (el orden define filas). Se muestran TODOS — la Switch normal
+# usa Main2/Main3 para colorear el cuerpo, la Lite solo Main+Sub.
 COLOR_OFFSETS = {
     'Cuerpo (Main)':      OFF_MAIN,
     'Borde (Bezel)':      OFF_BEZEL,
     'Botones / +- (Sub)': OFF_SUB,
+    'Main Color 2':       OFF_MAIN2,
+    'Main Color 3':       OFF_MAIN3,
 }
-LITE_ONLY_COLORS = {'Botones / +- (Sub)'}
+LITE_ONLY_COLORS = set()   # ya no se oculta nada: todos los campos siempre visibles
 
 CM_ESTANDAR = "00000000"
 CM_TWOTONE  = "C9000000"   # ilustracion two-tone (Zacian & Zamazenta)
@@ -157,19 +162,7 @@ def open_prodinfo():
 # --------------------------- modo / UI ---------------------------
 
 def on_mode_change():
-    lite = mode_var.get() == "lite"
-    # mostrar/ocultar campos solo-Lite
-    for key in LITE_ONLY_COLORS:
-        if lite:
-            color_rows[key]['label'].grid()
-            color_rows[key]['entry'].grid()
-            color_rows[key]['card'].grid()
-        else:
-            color_rows[key]['label'].grid_remove()
-            color_rows[key]['entry'].grid_remove()
-            color_rows[key]['card'].grid_remove()
-    for w in colormodel_widgets:
-        (w.grid() if lite else w.grid_remove())
+    # Todos los campos quedan visibles siempre; el modo solo cambia el dibujo del preview.
     draw_preview()
 
 
@@ -318,7 +311,7 @@ def update_prodinfo():
 
 root = tk.Tk()
 root.title(f"Prodify Dual — Switch / Switch Lite ({SCRIPT_VERSION})")
-root.geometry("460x500")
+root.geometry("470x600")
 root.resizable(False, False)
 # icono de la ventana (tolerante: .ico en Windows, .png como fallback)
 try:
