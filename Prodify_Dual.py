@@ -21,7 +21,7 @@ def resource_path(rel):
 # DESCIFRADO (.dec / .bin). NO toca el serial ni el certificado.
 # ---------------------------------------------------------------------------
 
-SCRIPT_VERSION = "dual-1.0"
+SCRIPT_VERSION = "dual-1.2"
 
 CRC_16_TABLE = [
     0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
@@ -33,6 +33,7 @@ OFF_MAIN  = 0x4240   # Cuerpo
 OFF_BEZEL = 0x4230   # Borde / bisel
 OFF_SUB   = 0x4220   # Botones / +-  (relevante en Lite)
 COLORMODEL_OFFSET     = 0x4330
+COLORVARIATION_OFFSET = 0x3750   # selecciona el set de colores; 0 = negro, usar 1-4
 
 # key -> offset (el orden define filas)
 COLOR_OFFSETS = {
@@ -48,6 +49,7 @@ CM_TWOTONE  = "C9000000"   # ilustracion two-tone (Zacian & Zamazenta)
 prodinfo_file_path = None
 original_colors = {}
 original_colormodel = ""
+original_colorvariation = ""
 
 
 def get_crc_16(data):
@@ -108,7 +110,7 @@ def set_status(text):
 # --------------------------- carga ---------------------------
 
 def open_prodinfo():
-    global prodinfo_file_path, original_colors, original_colormodel
+    global prodinfo_file_path, original_colors, original_colormodel, original_colorvariation
     path = filedialog.askopenfilename(
         title="Abrir PRODINFO descifrado",
         filetypes=[("PRODINFO", "*.dec *.bin PRODINFO"), ("Todos", "*.*")]
@@ -141,6 +143,11 @@ def open_prodinfo():
         cm = file.read(4).hex().upper()
         colormodel_var.set(cm)
         original_colormodel = cm
+
+        file.seek(COLORVARIATION_OFFSET)
+        cv = file.read(1)[0]
+        colorvariation_var.set(str(cv))
+        original_colorvariation = str(cv)
 
     file_value.config(text=os.path.basename(path))
     draw_preview()
@@ -242,10 +249,15 @@ def update_prodinfo():
     if len(cm_new) != 8 or not all(c in "0123456789ABCDEF" for c in cm_new):
         set_status("Color Model debe ser 8 hex (ej. 00000000 o C9000000).")
         return
+    cv_new = colorvariation_var.get().strip()
+    if not cv_new.isdigit() or not (0 <= int(cv_new) <= 4):
+        set_status("Color Variation debe ser 0-4 (usa 1-4; 0 = negro).")
+        return
 
     changed = (
         any(color_vars[k].get().lstrip('#').upper() != original_colors[k] for k in COLOR_OFFSETS)
         or cm_new != original_colormodel
+        or cv_new != original_colorvariation
     )
     if not changed:
         set_status("No hay cambios.")
@@ -276,6 +288,12 @@ def update_prodinfo():
                 blk[0:4] = bytes.fromhex(cm_new)
                 write_crc_block(file, COLORMODEL_OFFSET, blk)
 
+            if cv_new != original_colorvariation:
+                file.seek(COLORVARIATION_OFFSET)
+                blk = bytearray(file.read(14))
+                blk[0] = int(cv_new)
+                write_crc_block(file, COLORVARIATION_OFFSET, blk)
+
             new_sha = compute_sha256(prodinfo_file_path, offset=0x40)
             file.seek(0x20)
             file.write(new_sha)
@@ -290,6 +308,7 @@ def update_prodinfo():
         for k in COLOR_OFFSETS:
             original_colors[k] = color_vars[k].get().lstrip('#').upper()
         globals()['original_colormodel'] = cm_new
+        globals()['original_colorvariation'] = cv_new
         set_status("PRODINFO actualizado. Restauralo a la consola.")
     except Exception as e:
         set_status(f"Error al guardar: {e}")
@@ -314,6 +333,7 @@ color_vars = {}
 color_cards = {}
 color_rows = {}
 colormodel_var = tk.StringVar(value=CM_ESTANDAR)
+colorvariation_var = tk.StringVar(value="1")
 mode_var = tk.StringVar(value="lite")
 
 frame = tk.Frame(root)
@@ -349,6 +369,12 @@ for key in COLOR_OFFSETS:
     color_cards[key] = card
     color_rows[key] = {'label': lbl, 'entry': entry, 'card': card}
     r += 1
+
+# color variation (necesario: si es 0 el menu sale NEGRO; usar 1-4 para que se vean los colores)
+tk.Label(frame, text="Color Variation (1-4)").grid(row=r, column=0, sticky="w", pady=4)
+tk.Entry(frame, textvariable=colorvariation_var, width=6).grid(row=r, column=1, sticky="w", pady=4)
+tk.Label(frame, text="0 = negro", fg="#a00").grid(row=r, column=2, sticky="w")
+r += 1
 
 # color model + presets (solo Lite)
 cm_label = tk.Label(frame, text="Color Model (hex)")
