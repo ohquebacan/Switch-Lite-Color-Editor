@@ -22,7 +22,7 @@ jobs:
         run: pip install pyinstaller
 
       - name: Build EXE
-        run: pyinstaller --onefile --windowed --name Prodify_Dual Prodify_Dual.py
+        run: pyinstaller --onefile --windowed --icon=icon.ico --add-data "icon.ico;." --add-data "icon.png;." --name Prodify_Dual Prodify_Dual.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

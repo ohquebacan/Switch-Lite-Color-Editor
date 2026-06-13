@@ -1,9 +1,16 @@
 import tkinter as tk
 from tkinter import filedialog, colorchooser
 import os
+import sys
 import hashlib
 import struct
 import shutil
+
+
+def resource_path(rel):
+    """Ruta a un recurso, funciona en dev y en el .exe de PyInstaller."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, rel)
 
 # ---------------------------------------------------------------------------
 # Prodify Dual — editor de color para Nintendo Switch (Normal) y Switch LITE
@@ -294,6 +301,14 @@ root = tk.Tk()
 root.title(f"Prodify Dual — Switch / Switch Lite ({SCRIPT_VERSION})")
 root.geometry("460x500")
 root.resizable(False, False)
+# icono de la ventana (tolerante: .ico en Windows, .png como fallback)
+try:
+    root.iconbitmap(resource_path("icon.ico"))
+except Exception:
+    try:
+        root.iconphoto(True, tk.PhotoImage(file=resource_path("icon.png")))
+    except Exception:
+        pass
 
 color_vars = {}
 color_cards = {}
